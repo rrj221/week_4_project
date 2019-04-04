@@ -1,0 +1,123 @@
+---
+title: "Week 4 Project"
+output:
+  html_document: default
+---
+
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+
+
+#Analysis
+
+
+###Data Preparation
+```{r message =FALSE, warning=F}
+library(caret)
+library(dplyr)
+
+training <- read.csv("data/pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+testing <- read.csv("data/pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+#remove non-related columns
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+#Remove Mostly NA Columns from Training Set
+cleanColIndex <- colSums(is.na(training))/nrow(training) < .95
+trainingClean <- training[,cleanColIndex]
+
+inTrain <- createDataPartition(y = trainingClean$classe, p = .75, list = F)
+
+trainingSetClean <- trainingClean[inTrain,]
+testSetClean <- trainingClean[-inTrain,]
+
+
+#Imputed Sets
+trainingPreProc <- preProcess(trainingClean, method = "knnImpute") #knnImpute or bag Impute
+trainingImputed <- predict(trainingPreProc, trainingClean)
+
+inTrain <- createDataPartition(y = trainingImputed$classe, p = .75, list = F)
+
+trainingSetImputed <- trainingImputed[inTrain,]
+testSetImputed <- trainingImputed[-inTrain,]
+
+#Match columns in test set to training set (excluding classe column)
+trainingColNames <- names(testSetClean)
+testing <- testing[,trainingColNames[1:length(trainingColNames)-1]]
+
+```
+
+
+
+###Decision Tree on Imputed Data - Model
+```{r}
+modelTree <- train(
+                classe ~ ., 
+                method = "rpart", 
+                data = trainingSetImputed
+             )
+
+```
+
+
+###Decision Tree on Imputed Data - Results
+```{r}
+predictions <- predict(modelTree, newdata = testSetImputed)
+
+predictions <- as.factor(predictions)
+
+confusionMatrix(testSetImputed$classe, predictions)
+```
+
+
+The Decision Tree Model's accuracy is only about 50%.
+
+
+###Random Forest on Clean Data - Model
+```{r}
+modelRandomForestClean <- train(classe ~ ., 
+                           method = "rf", 
+                           data = trainingSetClean
+                     )
+```
+
+
+###Random Forest on Clean Data - Results
+```{r}
+predictions <- predict(modelRandomForestClean, newdata = testSetClean)
+
+predictions <- as.factor(predictions)
+
+confusionMatrix(testSetClean$classe, predictions)
+```
+
+
+The Random Forest Model has 99 percent accuracy
+
+###Predictions
+
+Now predictions on the testing data are made using the random forest model
+```{r}
+predictions <- predict(modelRandomForestClean, testing)
+
+predictions
+```
+
+
+
